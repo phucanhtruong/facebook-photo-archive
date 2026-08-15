@@ -36,6 +36,7 @@
   "host_permissions": [
     "https://facebook.com/*",
     "https://*.facebook.com/*",
+    "https://*.facebook.net/*",
     "https://*.fbcdn.net/*",
     "https://*.fbsbx.com/*"
   ]

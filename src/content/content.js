@@ -30,16 +30,26 @@
     }
 
     if (message?.type === "FETCH_IMAGE") {
-      fetch(message.url, { credentials: "include", cache: "no-store" })
+      fetch(message.url, {
+        credentials: "include",
+        cache: "default",
+        referrer: message.referrer || location.href,
+        referrerPolicy: "strict-origin-when-cross-origin",
+        headers: { Accept: "image/avif,image/webp,image/apng,image/jpeg,image/png,image/*,*/*;q=0.8" }
+      })
         .then(async (response) => {
           if (!response.ok) throw new Error(`Image request returned HTTP ${response.status}.`);
           const buffer = await response.arrayBuffer();
           if (message.maxBytes && buffer.byteLength > message.maxBytes) {
             throw new Error(`image exceeds the ${Math.round(message.maxBytes / 1024 / 1024)} MB per-image limit`);
           }
+          const contentType = response.headers.get("content-type") || "application/octet-stream";
+          if (!contentType.toLowerCase().startsWith("image/")) {
+            throw new Error(`Facebook returned ${contentType} instead of an image`);
+          }
           return sendResponse({
             ok: true,
-            contentType: response.headers.get("content-type") || "application/octet-stream",
+            contentType,
             dataBase64: arrayBufferToBase64(buffer)
           });
         })

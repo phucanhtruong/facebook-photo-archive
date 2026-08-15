@@ -72,10 +72,19 @@ async function runContentJob(tab, jobId) {
   }
 }
 
-async function fetchImageFromServiceWorker(url) {
-  const response = await fetch(url, { credentials: "include", cache: "no-store" });
+async function fetchImageFromServiceWorker(url, referrer) {
+  const response = await fetch(url, {
+    credentials: "include",
+    cache: "default",
+    referrer,
+    referrerPolicy: "strict-origin-when-cross-origin",
+    headers: { Accept: "image/avif,image/webp,image/apng,image/jpeg,image/png,image/*,*/*;q=0.8" }
+  });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   const contentType = response.headers.get("content-type") || "application/octet-stream";
+  if (!contentType.toLowerCase().startsWith("image/")) {
+    throw new Error(`server returned ${contentType} instead of an image`);
+  }
   const buffer = await response.arrayBuffer();
   if (buffer.byteLength > LIMITS.maxImageBytes) {
     throw new Error("image exceeds the per-image limit");
@@ -96,21 +105,26 @@ function arrayBufferToBase64(buffer) {
 async function fetchImage(job, candidate) {
   let timer;
   try {
-    const localFetch = fetchImageFromServiceWorker(candidate.url);
+    const localFetch = fetchImageFromServiceWorker(candidate.url, job.url);
     const timeout = new Promise((_, reject) => {
       timer = setTimeout(() => reject(new Error("request timed out")), LIMITS.imageFetchTimeoutMs);
     });
     return await Promise.race([localFetch, timeout]);
   } catch (serviceWorkerError) {
     if (!job.tabId) throw serviceWorkerError;
-    const response = await sendToTab(job.tabId, {
-      type: MESSAGE_TYPES.FETCH_IMAGE,
-      url: candidate.url,
-      maxBytes: LIMITS.maxImageBytes
-    });
-    if (!response?.ok) throw new Error(response?.error || serviceWorkerError.message || "request failed");
-    if (!response.dataBase64) throw new Error("Facebook returned no image data");
-    return { contentType: response.contentType, dataBase64: response.dataBase64 };
+    try {
+      const response = await sendToTab(job.tabId, {
+        type: MESSAGE_TYPES.FETCH_IMAGE,
+        url: candidate.url,
+        referrer: job.url,
+        maxBytes: LIMITS.maxImageBytes
+      });
+      if (!response?.ok) throw new Error(response?.error || "request failed");
+      if (!response.dataBase64) throw new Error("Facebook returned no image data");
+      return { contentType: response.contentType, dataBase64: response.dataBase64 };
+    } catch (contentError) {
+      throw new Error(`Extension fetch: ${serviceWorkerError.message || "failed"}; Facebook tab fetch: ${contentError.message || "failed"}`);
+    }
   } finally {
     if (timer) clearTimeout(timer);
   }
@@ -208,7 +222,10 @@ async function archiveJob(job) {
     }
   }
 
-  if (!imageIndex.length) throw new Error("Facebook image candidates were found, but none could be downloaded. Keep Facebook open and try again.");
+  if (!imageIndex.length) {
+    const reason = errors[0]?.error ? ` First error: ${errors[0].error}` : "";
+    throw new Error(`Facebook image candidates were found, but none could be downloaded.${reason} Keep Facebook open and try again.`);
+  }
   files.push({ path: `${prefix}images/index.json`, text: JSON.stringify(imageIndex, null, 2) });
   if (errors.length) files.push({ path: `${prefix}errors.json`, text: JSON.stringify(errors, null, 2) });
 
