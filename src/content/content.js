@@ -32,7 +32,7 @@
     if (message?.type === "FETCH_IMAGE") {
       fetch(message.url, {
         credentials: "include",
-        cache: "default",
+        cache: "force-cache",
         referrer: message.referrer || location.href,
         referrerPolicy: "strict-origin-when-cross-origin",
         headers: { Accept: "image/avif,image/webp,image/apng,image/jpeg,image/png,image/*,*/*;q=0.8" }

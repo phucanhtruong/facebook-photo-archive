@@ -75,7 +75,7 @@ async function runContentJob(tab, jobId) {
 async function fetchImageFromServiceWorker(url, referrer) {
   const response = await fetch(url, {
     credentials: "include",
-    cache: "default",
+    cache: "force-cache",
     referrer,
     referrerPolicy: "strict-origin-when-cross-origin",
     headers: { Accept: "image/avif,image/webp,image/apng,image/jpeg,image/png,image/*,*/*;q=0.8" }

@@ -131,7 +131,6 @@
       }
     };
 
-    add(metadata.ogImage, null, null, "og:image");
     getPhotoViewerImages().forEach((image) => {
       const width = image.naturalWidth || Number.parseInt(image.getAttribute("width"), 10) || null;
       const height = image.naturalHeight || Number.parseInt(image.getAttribute("height"), 10) || null;
@@ -139,6 +138,9 @@
         .sort((a, b) => (b.width || 0) - (a.width || 0))[0]?.url;
       add(selectedUrl, width, height, "photo-viewer");
     });
+    // og:image can be stale or already expired. Keep it only as a fallback/secondary
+    // candidate after the URL currently rendered by the photo viewer.
+    add(metadata.ogImage, null, null, "og:image");
 
     return [...candidates.values()].sort((a, b) =>
       ((b.width || 0) * (b.height || 0)) - ((a.width || 0) * (a.height || 0)));
