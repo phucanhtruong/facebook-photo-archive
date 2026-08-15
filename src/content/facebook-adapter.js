@@ -67,6 +67,40 @@
     }).filter((candidate) => candidate.url);
   }
 
+  function isVisibleLargeImage(image) {
+    const style = getComputedStyle(image);
+    const rect = image.getBoundingClientRect();
+    const width = rect.width || image.naturalWidth || 0;
+    const height = rect.height || image.naturalHeight || 0;
+    return style.display !== "none" && style.visibility !== "hidden" &&
+      width >= 160 && height >= 160 && rect.right > 0 && rect.bottom > 0 &&
+      rect.left < innerWidth && rect.top < innerHeight;
+  }
+
+  function isPageChromeImage(image) {
+    return Boolean(image.closest("header, nav, aside, [role='banner'], [role='navigation']"));
+  }
+
+  function getPhotoViewerImages() {
+    const viewerRoots = [...document.querySelectorAll("[role='dialog'], [aria-modal='true']")];
+    const scoped = viewerRoots.flatMap((root) => [...root.querySelectorAll("img")])
+      .filter((image) => !isPageChromeImage(image) && isVisibleLargeImage(image));
+    if (scoped.length) return scoped;
+
+    // Fallback for Facebook layouts that do not mark the photo viewer as a dialog.
+    // Only use large images currently visible in the viewport; never scrape the whole page.
+    return [...document.images]
+      .filter((image) => !isPageChromeImage(image) && isVisibleLargeImage(image))
+      .sort((a, b) => {
+        const area = (item) => {
+          const rect = item.getBoundingClientRect();
+          return (rect.width || 0) * (rect.height || 0);
+        };
+        return area(b) - area(a);
+      })
+      .slice(0, 12);
+  }
+
   function isUsefulImage(url, width, height) {
     if (!url || /^(data|blob):/i.test(url)) return false;
     if (!/^https?:/i.test(url)) return false;
@@ -88,11 +122,12 @@
     };
 
     add(metadata.ogImage, null, null, "og:image");
-    document.querySelectorAll("img").forEach((image) => {
+    getPhotoViewerImages().forEach((image) => {
       const width = image.naturalWidth || Number.parseInt(image.getAttribute("width"), 10) || null;
       const height = image.naturalHeight || Number.parseInt(image.getAttribute("height"), 10) || null;
-      add(image.currentSrc || image.src, width, height, "img");
-      readSrcSet(image.getAttribute("srcset")).forEach((candidate) => add(candidate.url, candidate.width, height, "srcset"));
+      const selectedUrl = image.currentSrc || image.src || readSrcSet(image.getAttribute("srcset"))
+        .sort((a, b) => (b.width || 0) - (a.width || 0))[0]?.url;
+      add(selectedUrl, width, height, "photo-viewer");
     });
 
     return [...candidates.values()].sort((a, b) =>
