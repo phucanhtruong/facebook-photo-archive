@@ -126,10 +126,11 @@
     const candidates = new Map();
     const add = (url, width = null, height = null, source = "dom") => {
       if (!isUsefulImage(url, width, height)) return;
-      const key = imageIdentity(url);
+      const downloadUrl = url.split("#")[0];
+      const key = imageIdentity(downloadUrl);
       const existing = candidates.get(key);
       if (!existing || (width || 0) * (height || 0) > (existing.width || 0) * (existing.height || 0)) {
-        candidates.set(key, { url: key, width, height, source });
+        candidates.set(key, { url: downloadUrl, width, height, source });
       }
     };
 
