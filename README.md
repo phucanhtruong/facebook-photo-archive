@@ -20,6 +20,8 @@ HHmmss_DDMMYY/
 
 The extension uses only local runtime JavaScript. JSZip is vendored under `src/vendor/`.
 
+Downloads are hard-set to the relative Chrome download path `BKU/CV_Archive/`. Set Chrome's default download directory to `D:\` to make the resulting absolute destination `D:\BKU\CV_Archive\`. Chrome's Downloads API rejects absolute paths supplied directly by extensions.
+
 ## Load locally
 
 1. Open `chrome://extensions`.

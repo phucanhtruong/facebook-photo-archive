@@ -1,6 +1,7 @@
 import { LIMITS, MESSAGE_TYPES } from "../shared/constants.js";
 
 const jobs = new Map();
+const DOWNLOAD_DIRECTORY = "BKU/CV_Archive";
 
 function safeText(value, fallback) {
   return typeof value === "string" && value.trim() ? value.trim() : fallback;
@@ -169,7 +170,7 @@ async function assembleZip(filename, files) {
   const downloadId = await new Promise((resolve, reject) => {
     chrome.downloads.download({
       url: response.objectUrl,
-      filename,
+      filename: `${DOWNLOAD_DIRECTORY}/${filename}`,
       saveAs: false,
       conflictAction: "uniquify"
     }, (id) => {
