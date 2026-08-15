@@ -34,7 +34,7 @@
         credentials: "include",
         cache: "force-cache",
         referrer: message.referrer || location.href,
-        referrerPolicy: "strict-origin-when-cross-origin",
+        referrerPolicy: "unsafe-url",
         headers: { Accept: "image/avif,image/webp,image/apng,image/jpeg,image/png,image/*,*/*;q=0.8" }
       })
         .then(async (response) => {

@@ -77,7 +77,7 @@ async function fetchImageFromServiceWorker(url, referrer) {
     credentials: "include",
     cache: "force-cache",
     referrer,
-    referrerPolicy: "strict-origin-when-cross-origin",
+    referrerPolicy: "unsafe-url",
     headers: { Accept: "image/avif,image/webp,image/apng,image/jpeg,image/png,image/*,*/*;q=0.8" }
   });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -223,7 +223,10 @@ async function archiveJob(job) {
   }
 
   if (!imageIndex.length) {
-    const reason = errors[0]?.error ? ` First error: ${errors[0].error}` : "";
+    const firstError = errors[0];
+    const reason = firstError?.error
+      ? ` First error for ${firstError.url.slice(0, 160)}: ${firstError.error}`
+      : "";
     throw new Error(`Facebook image candidates were found, but none could be downloaded.${reason} Keep Facebook open and try again.`);
   }
   files.push({ path: `${prefix}images/index.json`, text: JSON.stringify(imageIndex, null, 2) });

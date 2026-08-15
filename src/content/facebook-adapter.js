@@ -67,14 +67,15 @@
     }).filter((candidate) => candidate.url);
   }
 
-  function isVisibleLargeImage(image) {
+  function isLargeImage(image, allowOffscreen = false) {
     const style = getComputedStyle(image);
     const rect = image.getBoundingClientRect();
     const width = rect.width || image.naturalWidth || 0;
     const height = rect.height || image.naturalHeight || 0;
-    return style.display !== "none" && style.visibility !== "hidden" &&
-      width >= 160 && height >= 160 && rect.right > 0 && rect.bottom > 0 &&
-      rect.left < innerWidth && rect.top < innerHeight;
+    const largeEnough = width >= 160 && height >= 160;
+    const inViewport = rect.right > 0 && rect.bottom > 0 && rect.left < innerWidth && rect.top < innerHeight;
+    return style.display !== "none" && style.visibility !== "hidden" && largeEnough &&
+      (allowOffscreen || inViewport);
   }
 
   function isPageChromeImage(image) {
@@ -84,13 +85,14 @@
   function getPhotoViewerImages() {
     const viewerRoots = [...document.querySelectorAll("[role='dialog'], [aria-modal='true']")];
     const scoped = viewerRoots.flatMap((root) => [...root.querySelectorAll("img")])
-      .filter((image) => !isPageChromeImage(image) && isVisibleLargeImage(image));
+      .filter((image) => !isPageChromeImage(image) && isLargeImage(image, true))
+      .sort((a, b) => (b.naturalWidth * b.naturalHeight) - (a.naturalWidth * a.naturalHeight));
     if (scoped.length) return scoped;
 
     // Fallback for Facebook layouts that do not mark the photo viewer as a dialog.
     // Only use large images currently visible in the viewport; never scrape the whole page.
     return [...document.images]
-      .filter((image) => !isPageChromeImage(image) && isVisibleLargeImage(image))
+      .filter((image) => !isPageChromeImage(image) && isLargeImage(image))
       .sort((a, b) => {
         const area = (item) => {
           const rect = item.getBoundingClientRect();
@@ -131,16 +133,17 @@
       }
     };
 
-    getPhotoViewerImages().forEach((image) => {
+    const viewerImages = getPhotoViewerImages();
+    viewerImages.forEach((image) => {
       const width = image.naturalWidth || Number.parseInt(image.getAttribute("width"), 10) || null;
       const height = image.naturalHeight || Number.parseInt(image.getAttribute("height"), 10) || null;
       const selectedUrl = image.currentSrc || image.src || readSrcSet(image.getAttribute("srcset"))
         .sort((a, b) => (b.width || 0) - (a.width || 0))[0]?.url;
       add(selectedUrl, width, height, "photo-viewer");
     });
-    // og:image can be stale or already expired. Keep it only as a fallback/secondary
-    // candidate after the URL currently rendered by the photo viewer.
-    add(metadata.ogImage, null, null, "og:image");
+    // og:image can be stale or already expired. Use it only when no live viewer
+    // image was found, never alongside a live viewer candidate.
+    if (!viewerImages.length) add(metadata.ogImage, null, null, "og:image");
 
     return [...candidates.values()].sort((a, b) =>
       ((b.width || 0) * (b.height || 0)) - ((a.width || 0) * (a.height || 0)));
