@@ -77,7 +77,20 @@ async function fetchImageFromServiceWorker(url) {
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   const contentType = response.headers.get("content-type") || "application/octet-stream";
   const buffer = await response.arrayBuffer();
-  return { contentType, buffer };
+  if (buffer.byteLength > LIMITS.maxImageBytes) {
+    throw new Error("image exceeds the per-image limit");
+  }
+  return { contentType, dataBase64: arrayBufferToBase64(buffer) };
+}
+
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000;
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, Math.min(offset + chunkSize, bytes.length)));
+  }
+  return btoa(binary);
 }
 
 async function fetchImage(job, candidate) {
@@ -90,9 +103,14 @@ async function fetchImage(job, candidate) {
     return await Promise.race([localFetch, timeout]);
   } catch (serviceWorkerError) {
     if (!job.tabId) throw serviceWorkerError;
-    const response = await sendToTab(job.tabId, { type: MESSAGE_TYPES.FETCH_IMAGE, url: candidate.url });
+    const response = await sendToTab(job.tabId, {
+      type: MESSAGE_TYPES.FETCH_IMAGE,
+      url: candidate.url,
+      maxBytes: LIMITS.maxImageBytes
+    });
     if (!response?.ok) throw new Error(response?.error || serviceWorkerError.message || "request failed");
-    return { contentType: response.contentType, buffer: response.buffer };
+    if (!response.dataBase64) throw new Error("Facebook returned no image data");
+    return { contentType: response.contentType, dataBase64: response.dataBase64 };
   } finally {
     if (timer) clearTimeout(timer);
   }
@@ -115,12 +133,22 @@ async function ensureOffscreenDocument() {
 
 async function assembleZip(filename, files) {
   await ensureOffscreenDocument();
-  const response = await chrome.runtime.sendMessage({
-    type: MESSAGE_TYPES.ASSEMBLE_ZIP,
+  let response = await chrome.runtime.sendMessage({
+    type: MESSAGE_TYPES.ZIP_START,
     filename,
-    files
+    files: files.filter((file) => typeof file.text === "string")
   });
   if (!response?.ok) throw new Error(response?.error || "ZIP assembly failed.");
+  for (const file of files.filter((item) => item.dataBase64)) {
+    response = await chrome.runtime.sendMessage({
+      type: MESSAGE_TYPES.ZIP_ADD_FILE,
+      path: file.path,
+      dataBase64: file.dataBase64
+    });
+    if (!response?.ok) throw new Error(response?.error || "ZIP file assembly failed.");
+  }
+  response = await chrome.runtime.sendMessage({ type: MESSAGE_TYPES.ZIP_FINISH });
+  if (!response?.ok) throw new Error(response?.error || "ZIP download failed.");
   return response;
 }
 
@@ -150,15 +178,14 @@ async function archiveJob(job) {
     sendProgress(job.jobId, `Downloading image ${index + 1} of ${images.length}...`);
     try {
       const fetched = await fetchImage(job, candidate);
-      const buffer = fetched.buffer instanceof ArrayBuffer ? fetched.buffer : fetched.buffer?.buffer;
-      const byteLength = buffer?.byteLength || 0;
+      const byteLength = Math.floor((fetched.dataBase64?.length || 0) * 3 / 4);
       if (!byteLength) throw new Error("empty response");
-      if (byteLength > LIMITS.maxImageBytes) throw new Error("image exceeds the 25 MB per-image limit");
+      if (byteLength > LIMITS.maxImageBytes) throw new Error("image exceeds the per-image limit");
       if (totalBytes + byteLength > LIMITS.maxTotalImageBytes) throw new Error("total image limit reached");
 
       const extension = fileExtension(fetched.contentType, candidate.url);
       const name = `images/${String(index + 1).padStart(3, "0")}.${extension}`;
-      files.push({ path: `${prefix}${name}`, data: buffer });
+      files.push({ path: `${prefix}${name}`, dataBase64: fetched.dataBase64 });
       imageIndex.push({ ...candidate, path: name, contentType: fetched.contentType, bytes: byteLength });
       totalBytes += byteLength;
     } catch (error) {

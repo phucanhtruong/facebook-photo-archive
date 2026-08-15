@@ -10,6 +10,16 @@
 
   if (!adapter) return;
 
+  function arrayBufferToBase64(buffer) {
+    const bytes = new Uint8Array(buffer);
+    const chunkSize = 0x8000;
+    let binary = "";
+    for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+      binary += String.fromCharCode(...bytes.subarray(offset, Math.min(offset + chunkSize, bytes.length)));
+    }
+    return btoa(binary);
+  }
+
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message?.type === "RUN_ARCHIVE") {
       adapter.run({ url: message.url || location.href }, limits, (progress) => {
@@ -23,7 +33,15 @@
       fetch(message.url, { credentials: "include", cache: "no-store" })
         .then(async (response) => {
           if (!response.ok) throw new Error(`Image request returned HTTP ${response.status}.`);
-          return sendResponse({ ok: true, contentType: response.headers.get("content-type") || "application/octet-stream", buffer: await response.arrayBuffer() });
+          const buffer = await response.arrayBuffer();
+          if (message.maxBytes && buffer.byteLength > message.maxBytes) {
+            throw new Error(`image exceeds the ${Math.round(message.maxBytes / 1024 / 1024)} MB per-image limit`);
+          }
+          return sendResponse({
+            ok: true,
+            contentType: response.headers.get("content-type") || "application/octet-stream",
+            dataBase64: arrayBufferToBase64(buffer)
+          });
         })
         .catch((error) => sendResponse({ ok: false, error: error?.message || "Authenticated image fetch failed." }));
       return true;

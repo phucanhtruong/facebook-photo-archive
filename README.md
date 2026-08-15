@@ -29,4 +29,4 @@ The extension uses only local runtime JavaScript. JSZip is vendored under `src/v
 
 Chrome does not allow an extension to pin itself. To pin it after loading, open the puzzle-piece Extensions menu in the toolbar and click the pin icon next to **Facebook Photo Archive**.
 
-The extension keeps conservative limits: up to 30 comment-expansion actions, 500 comments, 30 image candidates, 25 MB per image, and 150 MB total image bytes.
+The extension keeps conservative limits: up to 30 comment-expansion actions, 500 comments, 30 image candidates, 20 MB per image, and 150 MB total image bytes. Image bytes are sent between extension contexts as bounded base64 messages and reconstructed as typed arrays before JSZip receives them.
