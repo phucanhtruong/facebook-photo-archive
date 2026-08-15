@@ -2,16 +2,6 @@
 
 let activeZip = null;
 
-function startDownload(options) {
-  return new Promise((resolve, reject) => {
-    chrome.downloads.download(options, (downloadId) => {
-      const error = chrome.runtime.lastError;
-      if (error) reject(new Error(error.message));
-      else resolve(downloadId);
-    });
-  });
-}
-
 function base64ToUint8Array(value) {
   const binary = atob(value);
   const bytes = new Uint8Array(binary.length);
@@ -52,19 +42,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     activeZip = null;
     const blob = await zip.generateAsync({ type: "blob", compression: "STORE" });
     const objectUrl = URL.createObjectURL(blob);
-    try {
-      const downloadId = await startDownload({
-        url: objectUrl,
-        filename: message.filename,
-        saveAs: false,
-        conflictAction: "uniquify"
-      });
-      setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
-      return { ok: true, downloadId };
-    } catch (error) {
-      URL.revokeObjectURL(objectUrl);
-      throw error;
-    }
+    // The Downloads API is not exposed in every offscreen-document context.
+    // Return the blob URL to the service worker, where the downloads permission is available.
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+    return { ok: true, objectUrl };
   })().then(sendResponse).catch((error) => sendResponse({ ok: false, error: error?.message || "ZIP download failed." }));
   return true;
 });

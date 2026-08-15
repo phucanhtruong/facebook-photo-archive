@@ -149,7 +149,22 @@ async function assembleZip(filename, files) {
   }
   response = await chrome.runtime.sendMessage({ type: MESSAGE_TYPES.ZIP_FINISH });
   if (!response?.ok) throw new Error(response?.error || "ZIP download failed.");
-  return response;
+  if (!response.objectUrl) throw new Error("ZIP assembly returned no downloadable file.");
+  if (!chrome.downloads?.download) throw new Error("Chrome's Downloads permission is unavailable. Reload the extension and try again.");
+
+  const downloadId = await new Promise((resolve, reject) => {
+    chrome.downloads.download({
+      url: response.objectUrl,
+      filename,
+      saveAs: false,
+      conflictAction: "uniquify"
+    }, (id) => {
+      const error = chrome.runtime.lastError;
+      if (error) reject(new Error(error.message));
+      else resolve(id);
+    });
+  });
+  return { ok: true, downloadId };
 }
 
 async function archiveJob(job) {
