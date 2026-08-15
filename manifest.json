@@ -1,0 +1,42 @@
+{
+  "manifest_version": 3,
+  "name": "Facebook Photo Archive",
+  "version": "1.0.0",
+  "description": "Archive the current Facebook photo post with metadata, comments, replies, and original image candidates.",
+  "minimum_chrome_version": "109",
+  "action": {
+    "default_popup": "src/popup/popup.html",
+    "default_title": "Facebook Photo Archive"
+  },
+  "background": {
+    "service_worker": "src/background/service-worker.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://facebook.com/*",
+        "https://*.facebook.com/*"
+      ],
+      "js": [
+        "src/content/facebook-adapter.js",
+        "src/content/content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "permissions": [
+    "activeTab",
+    "tabs",
+    "scripting",
+    "storage",
+    "downloads",
+    "offscreen"
+  ],
+  "host_permissions": [
+    "https://facebook.com/*",
+    "https://*.facebook.com/*",
+    "https://*.fbcdn.net/*",
+    "https://*.fbsbx.com/*"
+  ]
+}
